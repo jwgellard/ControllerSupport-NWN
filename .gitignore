@@ -1,0 +1,11 @@
+# Build output and local test files
+build/
+*.log
+*.bmp
+
+# Local reverse-engineering material: the Ghidra project, decompiled game code and
+# data pulled from the game. It's derived from Beamdog's binary, so it stays out of
+# the repo.
+re/ghidra_proj/
+re/decompiles/
+re/data/
