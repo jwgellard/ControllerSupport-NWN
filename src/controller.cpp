@@ -33,6 +33,25 @@
 // controller input exactly as if it came from the keyboard and mouse. The cursor
 // is moved with SDL_WarpMouseInWindow, which moves the OS pointer and produces
 // genuine motion events.
+//
+// Map of this file (docs/MAINTAINING.md §4 has the overview)
+// ----------------------------------------------------------
+//   Synthetic events      QueueKey / QueueMouseButton / QueueMouseWheel, Press / Release
+//   Controller devices    OpenPad / ClosePad / HandleDeviceEvent
+//   Sampling              AnyButton, MaxTrigger, ReadStick (pads and the scripted pad)
+//   Controller mode       SetPrototype ("proto" = controller mode), then by feature:
+//     radial              RadialOpen, UpdateRadial (stick snaps to slots)
+//     dialogue            RefreshDialog, DialogButton, UpdateDialogNav, SpeakerPortrait
+//     panels (menus)      PanelUp / PanelOpen, RefreshPanel (scan, focus), UpdatePanelNav,
+//                         UpdatePanelScroll, PanelTab, PanelButton
+//     targeting           UpdateTargeting, CycleTarget, SetTarget, TargetCandidates
+//     movement            UpdateProtoMove, UpdateProtoStop (stop dead), TraceStop
+//     L3+R3               UpdateDiagCombo (tap = snapshot, hold = mode switch)
+//   Per-frame update      UpdateButtons (bindings + mode overrides), UpdateMovement
+//                         (classic), UpdateCursor / UpdateCameraStick, UpdateHud
+//                         (what the overlay draws), pointer hiding, Update (the frame,
+//                         in order), Initialize, GuardedUpdate, HookedPollEvent,
+//                         InstallController
 
 namespace {
 
@@ -79,8 +98,8 @@ bool g_stickCamera;  // cursor stick rotates the camera (falls back to the point
 bool g_toggleArmed;  // stick:toggle pressed on its own, not as part of the L3+R3 combo
 bool g_cameraLogged; // last logged camera availability, so fallbacks show up once
 
-// Stage-2 prototype (docs/DESIGN.md, M0 spikes S1-S3): direct movement through
-// drive mode, and a soft target the pointer is pinned to.
+// Controller mode ("proto" for history: it began as the stage-2 prototype, DESIGN.md
+// M0 spikes S1-S3): direct movement through drive mode, and a soft target.
 bool g_proto;
 bool g_protoAutoStarted;
 bool g_snapshotRequested, g_protoToggleRequested;
@@ -439,7 +458,9 @@ void ReadStick(int stick, float* x, float* y)
 }
 
 // ---------------------------------------------------------------------------
-// Stage-2 prototype
+// Controller mode. In code it's "proto" (g_proto, SetPrototype, the "proto:" log
+// lines) because it began as the stage-2 prototype; players see "controller mode",
+// and hold L3+R3 to switch to classic (key and mouse emulation only) and back.
 
 constexpr float kPi = 3.14159265f;
 constexpr float kRadToDeg = 180.0f / kPi;
@@ -487,14 +508,14 @@ void SetPrototype(bool on)
         ProtoReleaseMovement();
         DropTarget();
     }
-    if (on && g_cfg.diag.targeting)
+    if (on && g_cfg.play.targeting)
         g_pickHooked = game::InstallPickHook();
     game::SetRadialCentered(on); // radials open mid-screen, where the stick steers them
     g_proto = on;
     g_protoState = nullptr;
-    Log("proto: prototype mode %s (left stick = direct movement [%s], targeting %s)", on ? "ON" : "OFF",
-        g_cfg.diag.driveMode == DriveMode::Steer ? "steer" : "facing",
-        !g_cfg.diag.targeting ? "off" : g_pickHooked ? "on" : "unavailable");
+    Log("proto: controller mode %s (left stick = direct movement [%s], targeting %s)", on ? "ON" : "OFF",
+        g_cfg.play.driveMode == DriveMode::Steer ? "steer" : "facing",
+        !g_cfg.play.targeting ? "off" : g_pickHooked ? "on" : "unavailable");
 }
 
 // True when the object's aim point is on screen.
@@ -512,7 +533,7 @@ bool OnScreen(const game::ObjectInfo& o)
 // X (right click) opens its radial menu. The pointer stays parked mid-screen, which
 // is the character, never a GUI panel.
 // Radial mode: a native radial menu is open (the game centres it on screen while
-// prototype mode runs). The right stick snaps the pointer onto the option nearest
+// controller mode runs). The right stick snaps the pointer onto the option nearest
 // its direction, skipping empty and disabled slots, so the game highlights exactly
 // one option by its own angle test; A clicks it, B goes back to the parent radial
 // (or closes the top one). Movement and the camera wait.
@@ -864,7 +885,7 @@ int PointerY()
 // Follows the open menu panel and keeps its control list fresh.
 void RefreshPanel(float dt)
 {
-    // In prototype mode, or out of a game (main menu, loading a game, character
+    // In controller mode, or out of a game (main menu, loading a game, character
     // creation) where the stock bindings have nothing better to offer.
     void* panel = g_proto || !game::Current().player ? game::OpenMenuPanel() : nullptr;
     if (panel != g_panel.panel) {
@@ -1068,7 +1089,7 @@ bool PanelButton(int i, bool down, bool wasDown)
 
 bool TargetingActive()
 {
-    return g_proto && g_cfg.diag.targeting && g_stickCamera && !g_mouseTakeover && g_pickHooked;
+    return g_proto && g_cfg.play.targeting && g_stickCamera && !g_mouseTakeover && g_pickHooked;
 }
 
 struct Candidate {
@@ -1101,7 +1122,7 @@ bool AimDirection(const game::ObjectInfo& pl, float* ax, float* ay)
 
 float RangeFor(const game::TargetInfo& info)
 {
-    return info.hostile ? g_cfg.diag.targetHostileRange : g_cfg.diag.targetInteractRange;
+    return info.hostile ? g_cfg.play.targetHostileRange : g_cfg.play.targetInteractRange;
 }
 
 // Everything the player could target right now, at any angle. `slack` stretches the
@@ -1189,7 +1210,7 @@ void UpdateTargeting(float dt)
         g_softTimer = 0.1f;
         std::vector<Candidate> list = TargetCandidates(1.3f);
         const Candidate *current = nullptr, *best = nullptr;
-        float cone = g_cfg.diag.targetCone / kRadToDeg;
+        float cone = g_cfg.play.targetCone / kRadToDeg;
         for (const Candidate& c : list) {
             if (c.oid == g_targetOid)
                 current = &c;
@@ -1337,8 +1358,8 @@ void UpdateProtoMove(float dt)
             Log("proto: stick released");
             game::ObjectInfo now;
             if (g_protoState == kDriving && game::PlayerInfo(&now)) {
-                g_stopTimer = g_cfg.diag.stopOnRelease ? 0.25f : 0.0f;
-                g_syncTimer = g_cfg.diag.stopOnRelease ? 0.6f : 0.0f;
+                g_stopTimer = g_cfg.play.stopOnRelease ? 0.25f : 0.0f;
+                g_syncTimer = g_cfg.play.stopOnRelease ? 0.6f : 0.0f;
                 g_syncCount = 0;
                 g_coastTimer = 0.75f;
                 g_releasePos = now.pos;
@@ -1371,7 +1392,7 @@ void UpdateProtoMove(float dt)
     }
     fx /= fl;
     fy /= fl;
-    const DiagConfig& d = g_cfg.diag;
+    const PlayConfig& d = g_cfg.play;
     if (d.lockFrame) {
         if (!g_frameLocked) {
             g_frameLocked = true;
@@ -1533,7 +1554,7 @@ void UpdateButtons()
             g_inputDown[i] = down[i];
             continue;
         }
-        if (layer == 0 && g_proto && g_cfg.diag.targeting && g_stickCamera && g_pickHooked &&
+        if (layer == 0 && g_proto && g_cfg.play.targeting && g_stickCamera && g_pickHooked &&
             (i == SDL_CONTROLLER_BUTTON_DPAD_LEFT || i == SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) {
             if (down[i] && !g_inputDown[i]) {
                 g_mouseTakeover = false; // the pad is aiming again
@@ -1851,7 +1872,7 @@ void SetPointerHidden(bool hide)
 // game's action cursor; so do pointer mode, radials and the real mouse.
 bool WantPointerHidden()
 {
-    if (!g_proto || !g_cfg.diag.hideIdlePointer || !g_stickCamera || g_mouseTakeover || RadialOpen() ||
+    if (!g_proto || !g_cfg.play.hideIdlePointer || !g_stickCamera || g_mouseTakeover || RadialOpen() ||
         PanelOpen() || !game::Current().camera)
         return false;
     return DialogOpen() || (TargetingActive() && g_targetOid == game::kInvalidOid);
@@ -1875,17 +1896,18 @@ void Update()
         if (g_refreshTimer >= 1.0f) {
             g_refreshTimer = 0;
             const game::Caps& c = game::Refresh(); // the camera stick needs it too
-            if (g_cfg.diag.enabled && g_cfg.diag.prototypeOnStart && !g_protoAutoStarted && c.player && c.camera) {
+            if (g_cfg.play.controllerMode && !g_protoAutoStarted && c.player && c.camera) {
                 g_protoAutoStarted = true;
                 SetPrototype(true);
             }
         }
     }
-    if (focus && g_cfg.diag.enabled) {
-        UpdateDiagCombo(dt);
+    if (focus) {
+        UpdateDiagCombo(dt); // L3+R3: tap = snapshot, hold = controller / classic mode
         if (g_snapshotRequested) {
             g_snapshotRequested = false;
-            DiagSnapshot(focus);
+            if (g_cfg.diag.enabled)
+                DiagSnapshot(focus);
         }
         if (g_protoToggleRequested) {
             g_protoToggleRequested = false;
@@ -1935,14 +1957,17 @@ void Update()
     UpdateHud();
 }
 
-// Ctrl+Shift+F10 = snapshot, Ctrl+Shift+F11 = prototype mode. Returns true if consumed.
+// Ctrl+Shift+F10 = snapshot (when [diag] is enabled), Ctrl+Shift+F11 = controller /
+// classic mode. Returns true if consumed.
 bool HandleDiagKey(const SDL_Event& e)
 {
-    if ((e.type != SDL_KEYDOWN && e.type != SDL_KEYUP) || !g_cfg.diag.enabled)
+    if (e.type != SDL_KEYDOWN && e.type != SDL_KEYUP)
         return false;
     Uint16 mod = e.key.keysym.mod;
     SDL_Scancode sc = e.key.keysym.scancode;
     if (!(mod & KMOD_CTRL) || !(mod & KMOD_SHIFT) || (sc != SDL_SCANCODE_F10 && sc != SDL_SCANCODE_F11))
+        return false;
+    if (sc == SDL_SCANCODE_F10 && !g_cfg.diag.enabled)
         return false;
     if (e.type == SDL_KEYDOWN && !e.key.repeat) {
         if (sc == SDL_SCANCODE_F10)
@@ -1984,11 +2009,12 @@ void Initialize()
     g_walkAction.kind = ActionKind::Keys;
     g_walkAction.keyCount = 1;
     g_walkAction.keys[0] = SDL_SCANCODE_LSHIFT;
-    if (g_cfg.diag.enabled) {
-        game::LogBuildInfo(g_modDir.c_str());
-        game::Refresh();
-        Log("diag: L3+R3 tap or Ctrl+Shift+F10 = snapshot; hold L3+R3 or Ctrl+Shift+F11 = prototype mode");
-    }
+    game::LogBuildInfo(g_modDir.c_str());
+    game::Refresh();
+    Log("hold L3+R3 or Ctrl+Shift+F11 = controller / classic mode (starts in %s)",
+        g_cfg.play.controllerMode ? "controller" : "classic");
+    if (g_cfg.diag.enabled)
+        Log("diag: L3+R3 tap or Ctrl+Shift+F10 = snapshot");
 }
 
 // SEH guard: a fault in the mod disables it instead of crashing the game.

@@ -12,6 +12,12 @@
 // Facts below come from decompiling nwmain.exe build 26c6e573 (Oct 2025); the
 // addresses in comments are that build's VAs. Offsets marked "known build"
 // are only used when the exe's PE timestamp and image size match that build.
+//
+// Layout: every constant first, each with the game function it was read from (the
+// trail to follow when porting to a new build: docs/MAINTAINING.md §9), then the
+// shared fault-guarded call wrappers, export resolution and self-tests (Refresh), then
+// the public functions grouped by feature roughly as game.h groups them, with each
+// feature's own wrappers beside it. DESIGN.md §12a has the reasoning.
 
 namespace game {
 namespace {

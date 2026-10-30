@@ -31,15 +31,17 @@ struct Action {
 
 enum Direction { kUp, kDown, kLeft, kRight, kDirectionCount };
 
-// Stage-2 spike settings ([diag] section, docs/DESIGN.md milestone M0).
 enum class DriveMode {
     Facing, // set the character's facing to the stick direction and hold forward
     Steer,  // hold forward and steer with the turn keys toward the stick direction
 };
 
-struct DiagConfig {
-    bool enabled = true;          // snapshots (L3+R3 tap, Ctrl+Shift+F10) and prototype mode
-    bool prototypeOnStart = false;
+// [play]: controller mode, the controller-first layer (direct movement, targeting,
+// stick radials, dialogue picker). In code it's "proto" (g_proto, SetPrototype),
+// because it began as the stage-2 prototype. Older inis kept these keys in [diag],
+// which is still read as a fallback.
+struct PlayConfig {
+    bool controllerMode = true; // mode = controller (start in it) or classic (key/mouse emulation only)
     DriveMode driveMode = DriveMode::Facing;
     bool lockFrame = false;       // keep the camera frame captured when the stick engages
     float forceSendDegrees = 12;  // resend DriveControl when the heading turns this much (0 = never)
@@ -51,6 +53,12 @@ struct DiagConfig {
     float targetHostileRange = 25;  // metres; hostile creatures
     bool hideIdlePointer = true;    // hide the mouse pointer when nothing is targeted, and in conversations
     bool stopOnRelease = true;    // end the local server's drive action when the stick is released
+};
+
+// [diag]: maintenance tools. Snapshots (L3+R3 tap, Ctrl+Shift+F10) only act when
+// triggered; the rest is off unless set.
+struct DiagConfig {
+    bool enabled = true;          // snapshots and the startup build/caps log lines
     bool traceStops = false;      // log client/server positions for 1.2 s after each release
     bool inject = false;          // play nwn_controller_inject.txt as a virtual pad (testing)
 };
@@ -85,6 +93,7 @@ struct Config {
     bool cameraInvertY = false;
 
     OverlayConfig overlay;
+    PlayConfig play;
     DiagConfig diag;
 };
 

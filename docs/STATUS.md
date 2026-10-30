@@ -1,12 +1,23 @@
 # Status and decisions
 
 This is a running log so work isn't lost between sessions. Newest entries are at
-the top of each section. Dates are absolute.
+the top of each section. Dates are absolute. How to work on the mod is in
+`docs/MAINTAINING.md`.
+
+Naming: entries before 2026-10-30 say "prototype mode". It has been controller mode
+since then (still `proto` in the code), and its settings moved from `[diag]` to
+`[play]`.
+
+## Project (2026-10-30)
+- **Public repo:** https://github.com/jwgellard/ControllerSupport-NWN (MIT). Game-derived material (`re/ghidra_proj`, `re/decompiles`, `re/data`) is gitignored and must never be pushed; commits use the GitHub no-reply email and UTC timestamps.
+- **Controller mode is the default.** `[play] mode = controller` (or `classic`) replaces `[diag] prototype_on_start`; older inis still load (harness check). The mode switch (hold L3+R3, Ctrl+Shift+F11) no longer depends on `[diag] enabled`, which now only covers snapshots. Self-tested: starts in controller mode after loading a save, L3+R3 hold switches to classic and back.
+- **Documentation for maintainers:** `docs/MAINTAINING.md` (setup, architecture, safety rules, debugging, testing, porting to a new game build, releasing, glossary), `CHANGELOG.md`, a map at the top of `controller.cpp`, `.gitattributes`.
+- **Next:** the user plays an hour pad-only and lists every point that needed the mouse or keyboard. That list orders the backlog below.
 
 ## Working (confirmed in game by the user)
 - **Stage 1 (2026-10-29): key and mouse emulation.** The pad drives the game through synthesized SDL key and mouse events. There are four layers, with LB and RB as modifiers; bindings are in the ini.
 - **Direct movement (prototype mode).** The left stick is camera-relative: the character turns to the stick direction and runs. The mod sets facing through the creature's `SetOrientation`, holds W, and forces DriveControl sends.
-  - `prototype_on_start = 1` turns it on at load. Holding L3+R3 or pressing Ctrl+Shift+F11 toggles it.
+  - On at load by default (`[play] mode = controller`). Holding L3+R3 or pressing Ctrl+Shift+F11 switches to classic and back.
   - The user's verdict: "the movement is good".
 - **Stopping dead on release.** The user's verdict: "perfect".
   - Problem 1: the server's drive waypoint sits about 0.4 s ahead, so the character coasted after release.
@@ -41,7 +52,7 @@ the top of each section. Dates are absolute.
   - Possible later additions: hold a button to label everything nearby (helps in dense areas), a hard lock-on for combat, and a proper on-screen marker with the overlay UI.
   - Code: `game::InstallPickHook` / `SetPickTarget` / `TargetInfoFor` (`game.cpp`) and `UpdateTargeting` / `CycleTarget` (`controller.cpp`).
   - The harness check "pick-hook detour round trip" tests the patch mechanism.
-  - Settings in `[diag]`: `targeting`, `target_cone`, `target_interact_range`, `target_hostile_range`.
+  - Settings in `[play]` (`[diag]` before 2026-10-30): `targeting`, `target_cone`, `target_interact_range`, `target_hostile_range`.
   - First in-game run (20:12) worked: hooks installed, and doors and creatures were targeted and locked.
   - The user wanted more reach, so the ranges went from 5/15 m to 10/25 m (interactables/hostiles). Changed in the ini and the defaults.
   - Log lines: `game: pick hooks installed` and `target: ...`.
@@ -118,7 +129,7 @@ the top of each section. Dates are absolute.
 - **Pointer hidden when idle (the user's request, 2026-10-29): built and installed, awaiting the test.**
   - In prototype camera mode, the pointer hides while nothing is targeted and while the picker is up. It comes back for a target (as the game's action cursor), in pointer mode, in radials, when the real mouse moves, and when prototype mode is off.
   - How: `SDL_ShowCursor` is hooked through the dynapi table. The game's own show/hide requests are kept, and the mod only hides on top of them.
-  - Setting: `hide_idle_pointer` in `[diag]` (default 1).
+  - Setting: `hide_idle_pointer` in `[play]` (default 1; `[diag]` before 2026-10-30).
 - **Verdict 2026-10-29 on 5b and the pointer:** "All of it is looking good." The log confirmed that the window's wrapped lines keep their trailing spaces, so the text joins correctly (`npc line` entries in the snapshot). The user asked for the stock conversation window to be hidden and the speaker's portrait to be shown in ours.
 - **Step 5c, stock window hidden + portrait: built and installed 2026-10-29, awaiting the test.**
   - While the picker shows a conversation, the game's conversation window is moved off-screen (`CGuiPanel::SetPositionScreen`). It is not deactivated, because that could end the conversation. If the game moves the window again, the mod follows. The window is put back when the conversation ends, prototype mode goes off, the pad disconnects, or the overlay isn't drawing. Setting: `hide_stock_dialog` in the new `[overlay]` ini section (which also holds `enabled` and `scale`; until now these were read from the ini but missing from it).
@@ -148,7 +159,19 @@ the top of each section. Dates are absolute.
 - **Next:** the user's verdict on step 6 and on the dialogue screen as a whole. Then per-panel work, asking which screens hurt most (DESIGN §8.2). See `docs/HANDOVER.md`.
 
 ## Known issues and backlog
-- Make prototype mode the normal mode, tidy the ini and README, and remove the diagnostics.
+Roughly in priority order until the user's pad-only playthrough reorders it.
+- Containers and looting, stores and bartering: untested; generic panel navigation may already cover them.
+- Spellbook and spell memorization, level-up: untested.
+- Spells and abilities aimed at a spot on the ground: only through pointer mode (R3) for now.
+- Setting up the quickbar (dragging spells and items onto it): untested.
+- Lists: the d-pad leaves a long list at its end instead of scrolling it (DESIGN §8.1).
+- New game: the module browser is NUI, which panel navigation can't see; character creation after it is untested.
+- Text entry (names, chat): needs a keyboard; an on-screen keyboard is DESIGN §9.
+- Multiplayer: untested; the server-side features can't work there.
+- Map, rest, options screens: untested.
+- Releases: no CI or release zip yet (MAINTAINING.md §10); code signing via SignPath later.
+- Supporting more than one game build would need the offsets in a per-build table (MAINTAINING.md §9).
+- Decided 2026-10-30: the diagnostics stay (snapshots, traces, inject); they only act when triggered or switched on.
 
 ## User preferences
 - They test in game and report briefly ("Nope", "Perfect"). Ask them specific questions, and read the log before theorising.

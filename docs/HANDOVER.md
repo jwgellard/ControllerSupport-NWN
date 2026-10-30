@@ -6,6 +6,8 @@ stand, what to build next and how. The durable records are still `docs/STATUS.md
 both updated as you go; this file is only the starting brief.
 
 ## Read first
+0. `docs/MAINTAINING.md`: the maintainer's handbook (supersedes the practical notes
+   below where they differ).
 1. `CLAUDE.md` in the game root: build, test, install and the working rules.
 2. `docs/STATUS.md`, especially "UI: hybrid custom overlay" and "User preferences".
 3. `docs/DESIGN.md` §6 (quickbar), §7 (radial, with the as-built notes), §8 (panel

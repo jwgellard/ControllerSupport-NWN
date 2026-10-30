@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "../src/config.h"
 #include "../src/controller.h"
 #include "../src/game.h"
 #include "../src/inject.h"
@@ -198,6 +199,33 @@ int main(int argc, char** argv)
     Check("dialogue text drops tags, folds lines", reply == "[Persuade] You should let us pass.", reply);
     std::string latin = text::Display("Ep\xe9" "e  ", 20);
     Check("quickbar label is UTF-8", latin == "Ep\xc3\xa9" "e", latin);
+
+    // Config: [play] holds the controller-mode settings; an ini from before it existed
+    // (prototype_on_start and the rest under [diag]) still loads the same way.
+    {
+        char tmp[MAX_PATH];
+        GetTempPathA(sizeof(tmp), tmp);
+        std::string ini = std::string(tmp) + "nwnc_harness_config.ini";
+        auto load = [&](const char* text) {
+            if (FILE* f = fopen(ini.c_str(), "w")) {
+                fputs(text, f);
+                fclose(f);
+            }
+            Config c;
+            LoadConfig(ini, c);
+            return c;
+        };
+        Config fresh = load("[general]\nenabled = 1\n");
+        Config shipped = load("[play]\nmode = classic\ntarget_cone = 30\n[diag]\ntarget_cone = 90\n");
+        Config legacy = load("[diag]\nprototype_on_start = 0\ntarget_cone = 45\nenabled = 0\n");
+        Config legacyOn = load("[diag]\nprototype_on_start = 1\n");
+        DeleteFileA(ini.c_str());
+        Check("config: controller mode by default, [play] wins, old [diag] keys still read",
+              fresh.play.controllerMode && fresh.play.targetCone == 60 && !shipped.play.controllerMode &&
+                  shipped.play.targetCone == 30 && !legacy.play.controllerMode && legacy.play.targetCone == 45 &&
+                  !legacy.diag.enabled && legacyOn.play.controllerMode,
+              "");
+    }
 
     // Panel focus: a fake 400x300 screen with two buttons on top and a 3x2 grid below.
     {

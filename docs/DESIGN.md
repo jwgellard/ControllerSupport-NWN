@@ -5,6 +5,10 @@ pointer) is built and passes the offline harness. This document plans stage 2: a
 can play entirely with a pad, built on direct movement, a soft target, and focus
 navigation instead of a pointer.
 
+As built, stage 2 is "controller mode" (the code's `proto`, from when it was the
+prototype); the original plan is kept below with "As built" notes. For how to work
+on the mod, see `docs/MAINTAINING.md`.
+
 Evidence tags used below: **[C]** confirmed by decompiling this build (26c6e573),
 **[N]** inferred from symbol/RTTI names, **[U]** unverified or needs an in-game spike.
 
@@ -354,7 +358,7 @@ one. So the mod steers the native highlight with the pointer instead:
 on-screen rectangle. This is the one missing fact for 8.1.
 
 **As built (2026-10-29).**
-- Panel mode is on while a menu panel is shown and prototype mode runs, and no radial
+- Panel mode is on while a menu panel is shown and controller mode runs, and no radial
   or conversation is over it. "Menu panel" means any panel in `**g_pGuiMan`'s list
   that isn't HUD. The HUD is a vtable list in `game.cpp`: chat prompt, quickbar,
   compass, party bar, player state bar, chat window, name bubbles, action queue,
@@ -383,7 +387,7 @@ on-screen rectangle. This is the one missing fact for 8.1.
   frames after the pointer moves there, so the GUI has seen the motion first.
 - Scrolling: `SDL_MOUSEWHEEL` events at the pointer (the right stick in camera mode,
   and the d-pad when nothing lies further that way).
-- Out of a game (no player creature) panel mode runs without prototype mode, so the
+- Out of a game (no player creature) panel mode runs without controller mode, so the
   main menu, Load screen and character creation get the same navigation.
 - Panels seen: `CPanelInventory` (83 controls with the 60 cells), `CPanelCharSheet`
   (9: close, 3 tabs, scroll buttons and bar, the stats list box; 19 on the feats tab,
@@ -706,9 +710,9 @@ matrices.
 | Trigger | Action |
 |---|---|
 | Tap L3+R3, or Ctrl+Shift+F10 | Snapshot to the log |
-| Hold L3+R3, or Ctrl+Shift+F11 | Toggle prototype mode |
+| Hold L3+R3, or Ctrl+Shift+F11 | Toggle prototype mode (now: controller / classic mode) |
 
-In prototype mode:
+In prototype mode (since grown into controller mode):
 - Left stick: camera-relative drive. `facing` mode uses `SetOrientation` + W + forced
   sends, and falls back to `steer` with W and A/D on unknown builds. Shift is held
   below 60% deflection.

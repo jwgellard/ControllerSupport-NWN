@@ -12,10 +12,8 @@ Only single player has been tested.
 
 ## What it does
 
-- **Basic layer:** the pad drives the game's own keys and mouse. That covers
-  movement keys, clicks, radial menus and the quickbar on LB / RB layers, all
-  configurable in an INI.
-- **Prototype mode**, a controller-first layer on top:
+- **Controller mode** (the default once a game is loaded), a controller-first
+  layer:
   - **Movement:** analog, camera-relative movement on the left stick. A half push
     walks, and you stop dead on release (single player).
   - **Camera:** analog camera control on the right stick.
@@ -33,8 +31,12 @@ Only single player has been tested.
     LB / RB switch tabs and the right stick scrolls.
   - **Pointer:** the mouse pointer is hidden when nothing is targeted.
 
-Prototype mode is off by default while it's being built. Hold **L3+R3 for a second**
-to toggle it, or set `prototype_on_start = 1` under `[diag]` in the INI.
+- **Classic mode:** the pad only drives the game's own keys and mouse: movement
+  keys, clicks, radial menus and the quickbar on LB / RB layers, all configurable
+  in an INI.
+
+Hold **L3+R3 for a second** (or press Ctrl+Shift+F11) to switch between the two.
+To start in classic mode, set `mode = classic` under `[play]` in the INI.
 
 ## Install
 
@@ -58,7 +60,7 @@ leaves the files alone, because they aren't part of the game's depot.
 
 | Input | Action |
 |---|---|
-| Left stick | Move (prototype mode: analog, camera-relative; otherwise W run, S back, A/D turn) |
+| Left stick | Move (controller mode: analog, camera-relative; classic: W run, S back, A/D turn) |
 | Right stick | Camera; R3 switches it to the mouse pointer and back |
 | A / Cross | Left click: select, move, attack, talk, drag |
 | X / Square | Right click: radial menu |
@@ -67,7 +69,7 @@ leaves the files alone, because they aren't part of the game's depot.
 | Start | Pause |
 | Back / Share | Map |
 | L3 | Inspect / highlight (Tab) |
-| D-pad | Camera (prototype mode: ←→ step between targets; in menus: move focus) |
+| D-pad | Camera (controller mode: ←→ step between targets; in menus: move focus) |
 | LT / RT | Zoom out / in |
 | **Hold LB** | D-pad ← ↑ → ↓ = F1–F4, X Y B A = F5–F8 (quickbar) |
 | **Hold RB** | D-pad = F9–F12, X spells, Y inventory, B character, A journal, Back rest, Start options |
@@ -81,11 +83,14 @@ Typing (chat, character names) still needs a keyboard or an on-screen keyboard.
 Windows built with the game's newer NUI system (the module browser behind "New", and
 server-made windows) aren't navigable yet, so they use the pointer.
 
-## Diagnostics
+## Troubleshooting
 
-- **Tap L3+R3 together** (or Ctrl+Shift+F10) to write a snapshot of the camera, nearby
-  objects, open panels and their controls to `bin\win32\nwn_controller.log`.
-- Turn the tools off with `enabled = 0` under `[diag]` in the INI.
+- The mod writes what it's doing to `bin\win32\nwn_controller.log`. A healthy start
+  says `known build`, and `controller mode ON` once a game is loaded.
+- **Tap L3+R3 together** (or Ctrl+Shift+F10) to add a snapshot of the camera, nearby
+  objects, open menus and their controls to the log. Include the log when reporting
+  a problem.
+- `enabled = 0` under `[general]` turns the mod off without uninstalling it.
 
 ## How it works
 
@@ -129,6 +134,12 @@ goes wrong the mod logs it to `bin\win32\nwn_controller.log` and switches that
 feature off rather than crashing. `docs/DESIGN.md` §12a lists every game offset and
 function the mod uses, with the reasoning.
 
+## Working on the mod
+
+Start with [`docs/MAINTAINING.md`](docs/MAINTAINING.md): setup, how the mod is put
+together, the safety rules for touching the game, debugging, testing, and what to do
+when the game updates. [`CHANGELOG.md`](CHANGELOG.md) lists what changed.
+
 ## Tests
 
 `cmake -S . -B build -DNWNC_BUILD_TESTS=ON && cmake --build build --config Release`,
@@ -146,7 +157,7 @@ files.
 ## Layout
 
     src/proxy.cpp        version.dll forwarding, SDL_DYNAPI_entry
-    src/controller.cpp   SDL hooks, controller sampling, prototype mode, menus, dialogue
+    src/controller.cpp   SDL hooks, controller sampling, controller mode, menus, dialogue
     src/config.cpp       INI parsing and default bindings
     src/sdl_api.cpp      SDL exports resolved from nwmain.exe, jump-slot decoding
     src/game.cpp         guarded access to game internals (objects, camera, GUI)
@@ -156,7 +167,8 @@ files.
     src/inject.cpp       scripted virtual pad for unattended testing
     src/diag.cpp         snapshot diagnostics
     data/                default INI and gamecontrollerdb.txt
-    docs/                STATUS (progress log), DESIGN (architecture, offsets), research
+    docs/                MAINTAINING (start here to work on the mod), STATUS (progress
+                         log and decisions), DESIGN (architecture, offsets), research
     re/                  reverse-engineering scripts (Ghidra, Python)
     tools/               in-game test helpers (screenshots, input, launch and load)
     tests/harness.cpp    offline end-to-end test

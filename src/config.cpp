@@ -104,6 +104,19 @@ float ReadFloat(const std::string& path, const char* section, const char* key, f
     return v.empty() ? def : static_cast<float>(atof(v.c_str()));
 }
 
+// A [play] setting; inis from before [play] existed kept it in [diag].
+std::string ReadPlay(const std::string& path, const char* key, const char* def)
+{
+    std::string v = ReadIni(path, "play", key, "");
+    return v.empty() ? ReadIni(path, "diag", key, def) : v;
+}
+
+float ReadPlayFloat(const std::string& path, const char* key, float def)
+{
+    std::string v = ReadPlay(path, key, "");
+    return v.empty() ? def : static_cast<float>(atof(v.c_str()));
+}
+
 int ParseStick(const std::string& v, int def)
 {
     std::string s = Lower(v);
@@ -302,30 +315,37 @@ void LoadConfig(const std::string& path, Config& cfg)
     cfg.overlay.hideStockDialog = ReadIni(path, "overlay", "hide_stock_dialog", "1") != "0";
     Log("config: overlay enabled=%d scale=%.2f hide_stock_dialog=%d", cfg.overlay.enabled, cfg.overlay.scale,
         cfg.overlay.hideStockDialog);
+    PlayConfig& p = cfg.play;
+    // Older inis: mode was "prototype_on_start" in [diag], default off.
+    std::string mode = Lower(ReadPlay(path, "mode", ""));
+    if (mode.empty())
+        mode = ReadIni(path, "diag", "prototype_on_start", "") == "0" ? "classic" : "controller";
+    p.controllerMode = mode != "classic";
+    p.driveMode = Lower(ReadPlay(path, "drive_mode", "facing")) == "steer" ? DriveMode::Steer : DriveMode::Facing;
+    p.lockFrame = ReadPlay(path, "lock_frame", "0") == "1";
+    p.forceSendDegrees = ReadPlayFloat(path, "force_send_degrees", p.forceSendDegrees);
+    p.walkThreshold = ReadPlayFloat(path, "walk_threshold", p.walkThreshold);
+    p.steerTolerance = ReadPlayFloat(path, "steer_tolerance", p.steerTolerance);
+    p.targeting = ReadPlay(path, "targeting", "1") != "0";
+    p.targetCone = ReadPlayFloat(path, "target_cone", p.targetCone);
+    p.targetInteractRange = ReadPlayFloat(path, "target_interact_range", p.targetInteractRange);
+    p.targetHostileRange = ReadPlayFloat(path, "target_hostile_range", p.targetHostileRange);
+    p.hideIdlePointer = ReadPlay(path, "hide_idle_pointer", "1") != "0";
+    p.stopOnRelease = ReadPlay(path, "stop_on_release", "1") != "0";
+    Log("config: play mode=%s drive_mode=%s lock_frame=%d force_send_degrees=%.1f walk_threshold=%.2f "
+        "steer_tolerance=%.1f stop_on_release=%d targeting=%d (cone %.0f, interact %.1f m, hostile %.1f m) "
+        "hide_idle_pointer=%d",
+        p.controllerMode ? "controller" : "classic", p.driveMode == DriveMode::Steer ? "steer" : "facing",
+        p.lockFrame, p.forceSendDegrees, p.walkThreshold, p.steerTolerance, p.stopOnRelease, p.targeting,
+        p.targetCone, p.targetInteractRange, p.targetHostileRange, p.hideIdlePointer);
+
     DiagConfig& d = cfg.diag;
     d.enabled = ReadIni(path, "diag", "enabled", "1") != "0";
-    d.prototypeOnStart = ReadIni(path, "diag", "prototype_on_start", "0") == "1";
-    d.driveMode = Lower(ReadIni(path, "diag", "drive_mode", "facing")) == "steer" ? DriveMode::Steer : DriveMode::Facing;
-    d.lockFrame = ReadIni(path, "diag", "lock_frame", "0") == "1";
-    d.forceSendDegrees = ReadFloat(path, "diag", "force_send_degrees", d.forceSendDegrees);
-    d.walkThreshold = ReadFloat(path, "diag", "walk_threshold", d.walkThreshold);
-    d.steerTolerance = ReadFloat(path, "diag", "steer_tolerance", d.steerTolerance);
-    d.targeting = ReadIni(path, "diag", "targeting", "1") != "0";
-    d.targetCone = ReadFloat(path, "diag", "target_cone", d.targetCone);
-    d.targetInteractRange = ReadFloat(path, "diag", "target_interact_range", d.targetInteractRange);
-    d.targetHostileRange = ReadFloat(path, "diag", "target_hostile_range", d.targetHostileRange);
-    d.hideIdlePointer = ReadIni(path, "diag", "hide_idle_pointer", "1") != "0";
-    d.stopOnRelease = ReadIni(path, "diag", "stop_on_release", "1") != "0";
     d.traceStops = ReadIni(path, "diag", "trace_stops", "0") == "1";
     d.inject = ReadIni(path, "diag", "inject", "0") == "1";
     if (d.inject)
         Log("config: diag inject=1: playing nwn_controller_inject.txt as a virtual pad");
-    Log("config: diag enabled=%d prototype_on_start=%d drive_mode=%s lock_frame=%d force_send_degrees=%.1f "
-        "walk_threshold=%.2f steer_tolerance=%.1f stop_on_release=%d targeting=%d (cone %.0f, interact %.1f m, "
-        "hostile %.1f m) hide_idle_pointer=%d",
-        d.enabled, d.prototypeOnStart, d.driveMode == DriveMode::Steer ? "steer" : "facing", d.lockFrame,
-        d.forceSendDegrees, d.walkThreshold, d.steerTolerance, d.stopOnRelease, d.targeting, d.targetCone,
-        d.targetInteractRange, d.targetHostileRange, d.hideIdlePointer);
+    Log("config: diag enabled=%d trace_stops=%d", d.enabled, d.traceStops);
 
     if (cfg.cursorCurve < 0.1f)
         cfg.cursorCurve = 0.1f;
